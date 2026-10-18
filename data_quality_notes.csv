@@ -1,0 +1,9 @@
+﻿issue,risk,action,status
+Doctor records for Hope Hospital,Names and specialties are provisional from earlier notes,Verify each name/profile on official website before demo/public use,pending
+Government hospital doctor names,No doctor names were visible in the collected board photos,Do not invent names; leave doctor table without entries for this hospital until a reliable source is found,handled
+Live availability,"Website/board listing does not prove a doctor is on duty, equipment is free, or a bed is vacant",Label results as listed/reported; add live availability only with a verified live source,handled
+Credentials,Website-listed credentials are not independently verified,Show source and use wording such as 'profile lists'; do not imply independent credential validation,handled
+UCG term on government board,Abbreviation is unclear from the transcription,Keep exact transcription and verify against photo/authority before expanding it,pending
+Contact/address details,Some details may be stale or transcribed incorrectly,Recheck official website or call hospital before deployment,pending
+Data coverage,"This is a small manually collected prototype dataset, not a complete Kolar healthcare directory",Display coverage limitations in app and pitch,handled
+Privacy and safety,Medical search could be mistaken for medical advice or emergency dispatch,"Add emergency disclaimer, no diagnosis, and tell users to contact hospital/emergency services directly",recommended

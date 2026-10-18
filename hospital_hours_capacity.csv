@@ -1,0 +1,8 @@
+﻿hospital_id,hospital_name,item,reported_value,source_type,source_url,verification_status,notes
+H005,Sri Narasimharaju District Hospital,OPD working days,09:00-13:00; 13:45-16:30,onsite_citizen_charter_photo,,transcribed_from_photo,Confirm locally; board transcription only.
+H005,Sri Narasimharaju District Hospital,OPD holidays,09:00-13:00,onsite_citizen_charter_photo,,transcribed_from_photo,Confirm locally; board transcription only.
+H005,Sri Narasimharaju District Hospital,Emergency,24x7,onsite_citizen_charter_photo,,transcribed_from_photo,Board-stated hours; not live status.
+H005,Sri Narasimharaju District Hospital,MCH services,24x7,onsite_citizen_charter_photo,,transcribed_from_photo,Board-stated hours; not live status.
+H005,Sri Narasimharaju District Hospital,Ambulance,24x7,onsite_citizen_charter_photo,,transcribed_from_photo,Board-stated hours; not live status.
+H005,Sri Narasimharaju District Hospital,General beds,300 beds (as read from board),onsite_citizen_charter_photo,,needs_photo_recheck,"Reported bed count, NOT current vacant-bed availability."
+H005,Sri Narasimharaju District Hospital,MCH beds,100 beds (as read from board),onsite_citizen_charter_photo,,needs_photo_recheck,"Reported bed count, NOT current vacant-bed availability."

@@ -1,0 +1,8 @@
+﻿field,meaning,example
+hospital_id,Stable unique hospital key used to join tables,H001
+doctor_id,Stable unique doctor key,D001
+service_id,Stable unique service record key,S001
+availability_status,"Evidence status, not real-time appointment or equipment availability",listed_on_website
+verification_status,"Whether the record is transcribed, provisional, or needs verification",needs_source_verification
+source_url,URL or blank if information came from an on-site photo,https://shreesaihospital.org/
+notes,"Limitations, source context, and safety caveats",Website-listed only; confirm directly with hospital.

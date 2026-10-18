@@ -1,0 +1,238 @@
+from __future__ import annotations
+import pandas as pd
+import streamlit as st
+import plotly.express as px
+from src.data import load_data, text, join_hospitals, verification_label, is_provisional
+from src.search import search_hospitals, search_doctors, search_services, ai_search
+
+st.set_page_config(page_title="Medifind AI | Kolar healthcare discovery", page_icon="✚", layout="wide", initial_sidebar_state="expanded")
+
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+:root{--ink:#153b38;--muted:#657d79;--teal:#087e74;--mint:#e8f5f1;--gold:#d69735}
+html,body,[class*="css"]{font-family:'DM Sans',sans-serif;color:var(--ink)}
+h1,h2,h3{font-family:'Manrope',sans-serif;letter-spacing:-.035em;color:#153b38}
+.block-container{padding-top:1.4rem;padding-bottom:3rem;max-width:1280px}
+.hero{background:linear-gradient(115deg,#e8f5f1 0%,#f4f8ef 55%,#fff8e9 100%);border:1px solid #dcebe5;border-radius:24px;padding:34px 38px;margin:10px 0 22px;position:relative;overflow:hidden}
+.hero:after{content:'✚';position:absolute;right:45px;top:8px;font-size:130px;color:#087e7414;font-weight:800}
+.eyebrow{color:#087e74;font-size:.76rem;letter-spacing:.13em;font-weight:700;text-transform:uppercase}
+.hero h1{font-size:2.55rem;margin:.35rem 0 .4rem;line-height:1.08}.hero p{color:#506c66;font-size:1.04rem;max-width:680px}
+.metric{background:#fff;border:1px solid #e4eeea;border-radius:16px;padding:17px 18px;min-height:95px;box-shadow:0 3px 14px #183d3510}
+.metric b{display:block;font-family:Manrope;font-size:1.8rem;color:#087e74}.metric span{font-size:.83rem;color:#657d79}
+.card{background:white;border:1px solid #e2ece8;border-radius:16px;padding:18px 20px;margin:10px 0;box-shadow:0 4px 18px #183d3509}
+.pill{display:inline-block;border-radius:999px;padding:4px 10px;background:#e8f5f1;color:#087e74;font-size:.75rem;font-weight:700;margin:2px 4px 2px 0}
+.warn{background:#fff7e8;border-left:4px solid #d69735;border-radius:8px;padding:12px 15px;color:#5c4b2a;margin:12px 0}
+.soft{color:#657d79;font-size:.88rem}.section{padding-top:8px}
+div[data-testid="stSidebar"]{background:#f4f8f6}
+.stButton>button{border-radius:10px;font-weight:600}
+@media(max-width:700px){.hero{padding:25px 22px}.hero h1{font-size:2rem}.hero:after{right:10px;font-size:75px}}
+</style>
+""", unsafe_allow_html=True)
+
+@st.cache_data(show_spinner=False)
+def get_data(): return load_data()
+data = get_data()
+hospitals, doctors, services = (data[k] for k in ["hospitals", "doctors", "services"])
+
+with st.sidebar:
+    st.markdown("## ✚ Medifind **AI**")
+    st.caption("Healthcare discovery · Kolar, Karnataka")
+    page = st.radio("Navigate", ["Home", "Find Hospitals", "Find Doctors", "Find Services", "AI Search", "Dashboard & Data Quality", "Discover Medifind AI"], label_visibility="collapsed")
+    st.markdown("---")
+    st.caption("Information discovery only. Not for diagnosis, treatment, or emergency decisions.")
+    st.caption("Dataset: supplied project CSVs")
+
+def metric_row():
+    cols=st.columns(4)
+    values=[(len(hospitals),"Hospitals in dataset"),(len(doctors),"Doctor records"),(len(services),"Service records"),(hospitals.get("city",pd.Series(dtype=str)).nunique() if not hospitals.empty and "city" in hospitals else 0,"Cities represented")]
+    for c,(v,label) in zip(cols,values): c.markdown(f'<div class="metric"><b>{v:,}</b><span>{label}</span></div>',unsafe_allow_html=True)
+
+def source_line(row, *fields):
+    for key in fields:
+        value=text(row.get(key,""))
+        if value and value.startswith("http"):
+            st.markdown(f"[View source ↗]({value})")
+            return
+
+def hospital_cards(results):
+    if results.empty: st.info("No matching hospitals found. Try a broader name, location, or hospital type."); return
+    for _,r in results.iterrows():
+        st.markdown(f'<div class="card"><h3>{text(r.get("hospital_name"))}</h3><span class="pill">{text(r.get("hospital_type")) or "Type not recorded"}</span><span class="pill">{text(r.get("city")) or "Location not recorded"}</span></div>',unsafe_allow_html=True)
+        c1,c2=st.columns([3,1])
+        with c1:
+            address=" · ".join(filter(None,[text(r.get("address")),text(r.get("city")),text(r.get("district")),text(r.get("state")),text(r.get("pincode"))]))
+            st.write(address or "Address not available in supplied data.")
+            st.caption(f"Data status: {text(r.get('data_status')) or 'not specified'} · Source: {text(r.get('source_type')) or 'not specified'}")
+            if text(r.get("notes")): st.caption(text(r.get("notes")))
+        with c2:
+            phone=text(r.get("phone")); website=text(r.get("website")) or text(r.get("source_url"))
+            st.write(f"Phone: {phone}" if phone else "Phone not listed")
+            if website.startswith("http"): st.markdown(f"[Website / source ↗]({website})")
+        hid=text(r.get("hospital_id"))
+        with st.expander("Related listed services and published hours"):
+            sr=services[services.get("hospital_id",pd.Series(dtype=str)).astype(str)==hid] if not services.empty and "hospital_id" in services else pd.DataFrame()
+            if sr.empty: st.write("No related service rows supplied.")
+            else: st.write(", ".join(sr.get("service_name",pd.Series(dtype=str)).dropna().astype(str).tolist()))
+            hr=data["hours"][data["hours"].get("hospital_id",pd.Series(dtype=str)).astype(str)==hid] if not data["hours"].empty and "hospital_id" in data["hours"] else pd.DataFrame()
+            if hr.empty: st.write("No published hours/capacity rows supplied.")
+            else:
+                st.markdown(hr[[c for c in ["item","reported_value","verification_status","notes"] if c in hr]].to_html(index=False, escape=True), unsafe_allow_html=True)
+                st.caption("Published/transcribed report only; this is not live hours, bed, or equipment availability.")
+
+def doctor_cards(results):
+    if results.empty: st.info("No matching doctor records found. Try a specialization, name, or qualification from the dataset."); return
+    for _,r in results.iterrows():
+        label=verification_label(r)
+        st.markdown(f'<div class="card"><h3>{text(r.get("doctor_name")) or "Name not recorded"}</h3><span class="pill">{text(r.get("parent_hospital_name")) or text(r.get("hospital_name")) or "Hospital not linked"}</span><span class="pill">{label}</span></div>',unsafe_allow_html=True)
+        st.write(f"**Qualifications:** {text(r.get('qualifications')) or 'Not listed'}")
+        st.write(f"**Specializations:** {text(r.get('specializations')) or 'Not listed'}")
+        if text(r.get("additional_training")): st.write(f"**Additional training:** {text(r.get('additional_training'))}")
+        if text(r.get("notes")): st.caption(text(r.get("notes")))
+        u=text(r.get("profile_url")) or text(r.get("source_url"))
+        if u.startswith("http"): st.markdown(f"[Profile / source ↗]({u})")
+        st.divider()
+
+def service_cards(results):
+    if results.empty: st.info("No matching listed services found. Try a broader term."); return
+    for _,r in results.iterrows():
+        st.markdown(f'<div class="card"><h3>{text(r.get("service_name"))}</h3><span class="pill">{text(r.get("category")) or "Category not recorded"}</span><span class="pill">{text(r.get("parent_hospital_name")) or text(r.get("hospital_name")) or "Hospital not linked"}</span></div>',unsafe_allow_html=True)
+        st.caption(f"Recorded status: {text(r.get('availability_status')) or 'not recorded'} · Source type: {text(r.get('source_type')) or 'not recorded'}")
+        if text(r.get("notes")): st.caption(text(r.get("notes")))
+        u=text(r.get("source_url")) or text(r.get("parent_source_url"))
+        if u.startswith("http"): st.markdown(f"[Source ↗]({u})")
+        st.caption("Listed information is not live availability. Confirm directly with the hospital.")
+        st.divider()
+
+def filters(kind, frame):
+    filtered=frame.copy()
+    if filtered.empty: return filtered
+    c1,c2=st.columns(2)
+    if kind=="hospital":
+        col="hospital_type"
+        if col in filtered:
+            opts=sorted(filtered[col].dropna().astype(str).unique())
+            sel=c1.multiselect("Hospital type",opts)
+            if sel: filtered=filtered[filtered[col].astype(str).isin(sel)]
+        col="city"
+        if col in filtered:
+            opts=sorted(filtered[col].dropna().astype(str).unique())
+            sel=c2.multiselect("City",opts)
+            if sel: filtered=filtered[filtered[col].astype(str).isin(sel)]
+    elif kind=="doctor":
+        linked=join_hospitals(filtered,hospitals)
+        col="parent_hospital_name"
+        if col in linked:
+            opts=sorted(linked[col].dropna().astype(str).unique())
+            sel=c1.multiselect("Hospital",opts)
+            if sel: linked=linked[linked[col].astype(str).isin(sel)]
+        filtered=linked
+    else:
+        col="category"
+        if col in filtered:
+            opts=sorted(filtered[col].dropna().astype(str).unique())
+            sel=c1.multiselect("Category",opts)
+            if sel: filtered=filtered[filtered[col].astype(str).isin(sel)]
+        if not hospitals.empty:
+            opts=sorted(hospitals["hospital_name"].dropna().astype(str).unique())
+            sel=c2.multiselect("Hospital",opts)
+            if sel:
+                allowed=hospitals[hospitals.hospital_name.astype(str).isin(sel)].hospital_id.astype(str)
+                filtered=filtered[filtered.hospital_id.astype(str).isin(allowed)]
+    return filtered
+
+def search_section(kind, default=""):
+    names={"hospital":"Hospitals","doctor":"Doctors","service":"Services"}
+    query=st.text_input(f"Search {names[kind].lower()}",value=default,placeholder={"hospital":"e.g. Government, Kolar, Hope Hospital","doctor":"e.g. paediatrics, orthopaedics, doctor name","service":"e.g. radiodiagnosis, blood bank, emergency"}[kind],key=f"search_{kind}_{page}")
+    base={"hospital":hospitals,"doctor":doctors,"service":services}[kind]
+    found={"hospital":search_hospitals,"doctor":search_doctors,"service":search_services}[kind](data,query) if query.strip() else base.copy()
+    found=filters(kind,found)
+    if kind=="hospital": hospital_cards(found)
+    elif kind=="doctor": doctor_cards(found)
+    else: service_cards(found)
+
+if page=="Home":
+    st.markdown('<div class="hero"><div class="eyebrow">Kolar · Karnataka · Community health discovery</div><h1>The right healthcare information,<br>closer to you.</h1><p>Explore hospitals, listed doctors, specializations and services from published project sources—with clear labels about what is known and what still needs confirmation.</p></div>',unsafe_allow_html=True)
+    metric_row()
+    st.markdown("### What are you looking for?")
+    q=st.text_input("Search across the directory",placeholder="Try ‘paediatrician in Kolar’ or ‘radiodiagnosis’",label_visibility="collapsed",key="home_query")
+    if q:
+        kind,res=ai_search(data,q); st.caption(f"Searching {kind} · Matches use TF‑IDF similarity and keyword overlap; this is discovery, not a recommendation.")
+        {"hospitals":hospital_cards,"doctors":doctor_cards,"services":service_cards}[kind](res)
+    st.markdown("#### Quick searches")
+    cols=st.columns(4)
+    for c,label,qry in zip(cols,["Hospitals in Kolar","Orthopaedics","Paediatrics","Radiodiagnosis"],["Kolar","orthopaedics","paediatrics","radiodiagnosis"]):
+        with c:
+            st.button(label,use_container_width=True,on_click=lambda value=qry: st.session_state.update(home_query=value))
+    st.markdown('<div class="warn"><b>Information-quality notice.</b> Records reflect supplied source material and can be incomplete, provisional, or out of date. Verify critical details with the hospital. This app does not show live doctor, bed, or equipment availability and is not for emergencies.</div>',unsafe_allow_html=True)
+    st.markdown("#### Discover the directory")
+    a,b,c=st.columns(3)
+    for col,title,desc in [(a,"Hospitals","Source links, recorded contacts, related services and published information."),(b,"Doctors","Names, qualifications and specializations as recorded in the CSVs."),(c,"Services","Services listed in source records—not confirmation that they are currently available.")]:
+        col.markdown(f'<div class="card"><h3>{title}</h3><span class="soft">{desc}</span></div>',unsafe_allow_html=True)
+elif page=="Find Hospitals":
+    st.markdown("# Find hospitals"); st.caption("Search the supplied hospital directory. Filters and details use the original CSV records.")
+    search_section("hospital")
+elif page=="Find Doctors":
+    st.markdown("# Find doctors"); st.caption("Browse doctor records and documented specializations. Qualifications are not independently validated by this app.")
+    search_section("doctor")
+elif page=="Find Services":
+    st.markdown("# Find services"); st.caption("Services are dataset listings. A listing does not establish current or live availability.")
+    search_section("service")
+elif page=="AI Search":
+    st.markdown("# AI Search"); st.write("Ask in plain language. A lightweight TF‑IDF/cosine similarity search and keyword fallback match your query to dataset fields, without making diagnoses or medical recommendations.")
+    query=st.text_input("Your query",placeholder="Which hospitals list gynaecology services?",key="ai_query")
+    if query:
+        kind,res=ai_search(data,query)
+        st.caption(f"Interpreted as: **{kind}**. Each result is matched against available text fields; matches are relevance hints, not endorsements.")
+        if res.empty: st.info("No strong records matched that query. Try a shorter specialty or hospital name.")
+        else:
+            if kind=="hospitals": hospital_cards(res)
+            elif kind=="doctors": doctor_cards(res)
+            else: service_cards(res)
+elif page=="Dashboard & Data Quality":
+    st.markdown("# Dataset dashboard"); st.caption("Counts below are calculated from the supplied files; they describe records, not healthcare capacity or quality.")
+    metric_row()
+    c1,c2=st.columns(2)
+    if not hospitals.empty and "hospital_type" in hospitals:
+        c1.markdown("### Hospitals by recorded type")
+        fig=px.bar(hospitals.hospital_type.fillna("Not recorded").value_counts().rename_axis("Type").reset_index(name="Records"),x="Type",y="Records",color="Type",color_discrete_sequence=["#087e74","#d69735","#9cbcb2"]); fig.update_layout(showlegend=False,margin=dict(l=10,r=10,t=10,b=10)); c1.plotly_chart(fig,use_container_width=True)
+    if not services.empty and "category" in services:
+        c2.markdown("### Service records by category")
+        s=services.category.fillna("Not recorded").value_counts().head(10).sort_values().reset_index(); s.columns=["Category","Records"]
+        fig=px.bar(s,x="Records",y="Category",orientation="h",color_discrete_sequence=["#087e74"]); fig.update_layout(showlegend=False,margin=dict(l=10,r=10,t=10,b=10)); c2.plotly_chart(fig,use_container_width=True)
+    st.markdown("### Data completeness")
+    for label,df,cols in [("Hospitals",hospitals,["phone","address","website","pincode"]),("Doctors",doctors,["qualifications","profile_url"]),("Services",services,["source_url","availability_status"])]:
+        if not df.empty:
+            rows=[]
+            for col in cols:
+                if col in df: rows.append({"Dataset":label,"Field":col,"Missing":int(df[col].isna().sum()),"Records":len(df)})
+            if rows: st.markdown(pd.DataFrame(rows).to_html(index=False, escape=True), unsafe_allow_html=True)
+    prov=sum(is_provisional(r) for _,r in doctors.iterrows()) if not doctors.empty else 0
+    st.info(f"Doctor records marked provisional/needs verification by source notes: {prov} of {len(doctors)}. No field-level source verification is performed by this app.")
+    if not data["quality"].empty:
+        st.markdown("### Supplied data-quality notes")
+        st.markdown(data["quality"].to_html(index=False, escape=True), unsafe_allow_html=True)
+    if not data["dictionary"].empty:
+        with st.expander("Data dictionary"): st.markdown(data["dictionary"].to_html(index=False, escape=True), unsafe_allow_html=True)
+elif page=="Discover Medifind AI":
+    st.markdown('<div class="hero"><div class="eyebrow">Discover Medifind AI</div><h1>The right healthcare information,<br>closer to you.</h1><p>Search hospitals, documented doctor profiles and listed services in one place. Each result keeps its source and information-quality context visible.</p></div>',unsafe_allow_html=True)
+    st.markdown("### Try the Demo")
+    st.write("Choose a real-data example query, inspect the matching records, and see how source labels work. Exit demo mode any time by choosing another section in the navigation.")
+    suggestions=[("Show government hospitals","government hospitals"),("Doctors related to orthopaedics","orthopaedics"),("Find paediatricians","paediatrician"),("Hospitals listing radiodiagnosis","radiodiagnosis")]
+    # These examples are grounded in known terms present in the supplied CSVs.
+    valid=suggestions
+    cols=st.columns(2)
+    for i,(label,qry) in enumerate(valid):
+        if cols[i%2].button(label,use_container_width=True,key=f"demo_{i}"): st.session_state.demo_query=qry
+    q=st.session_state.get("demo_query","")
+    if q:
+        kind,res=ai_search(data,q)
+        st.markdown(f"#### Demo query: “{q}”")
+        st.caption(f"Real records matched in **{kind}**. Match reasons are available terms in the record; source and verification labels remain attached.")
+        if res.empty: st.info("This example has no matching records in the supplied data.")
+        elif kind=="hospitals": hospital_cards(res)
+        elif kind=="doctors": doctor_cards(res)
+        else: service_cards(res)
+    with st.expander("How Medifind AI works"):
+        st.markdown("1. The user enters a query.\n2. The search engine matches relevant text fields with TF‑IDF/cosine similarity and keyword overlap.\n3. The app presents matching dataset records with available source information and verification labels.\n4. Users verify critical details with the hospital.")
+    st.markdown('<div class="warn"><b>Important:</b> Medifind AI is an information discovery tool, not a diagnosis or treatment system. Do not rely on it for emergencies or live availability.</div>',unsafe_allow_html=True)
