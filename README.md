@@ -1,74 +1,113 @@
-# Medifind AI — Kolar healthcare discovery
+# Medifind AI — Kolar Healthcare Discovery
 
-A functional, lightweight Streamlit directory app for exploring the supplied hospital, doctor, service, hours/capacity, data dictionary, and data-quality CSVs. Built for the **IBM Z Datathon 2026 / SSF2026** project context. It discovers and explains published records; it does not diagnose, prescribe, assess hospital quality, or provide live availability.
+**IBM Z Datathon 2026 | SSF2026 | Team Nuvyra**
 
-## Features
+Medifind AI is a healthcare discovery prototype built with Python and Streamlit. It brings hospital and doctor directory information into one place and uses AI-assisted text search to help users discover relevant records more easily.
 
-- Searchable hospital, doctor, and service directories with filters and source links.
-- Natural-language-style AI Search using local TF-IDF/cosine similarity plus transparent keyword overlap; no API keys or network model dependency.
-- Functional “Discover Medifind AI” demo with dataset-based queries.
-- Dynamic record counts, data completeness summaries, and real-data charts.
-- Hospital joins via `hospital_id`; source, verification, and provisional notes are retained and surfaced.
-- Missing data and missing CSV files degrade gracefully.
-- Responsive Streamlit UI with responsible-use notices.
+> **Responsible use:** Medifind AI is a directory and discovery prototype. It does not diagnose, prescribe, guarantee live availability, or replace professional medical advice or emergency services.
 
-## Run locally
+## Team Nuvyra
 
-Python 3.10–3.12 is recommended. From this project directory:
+- Sushmitha M
+- Rudranamma A S
+- Hemavathi D S
+- S Vikas
+
+## Problem Statement
+
+People may need to search multiple listings to find relevant hospitals, doctors, and healthcare services. Information can be incomplete, difficult to compare, or not updated in real time.
+
+## Our Solution
+
+Medifind AI provides a single interface for exploring the healthcare directory data available to the project. Users can browse records, apply filters, and use AI-assisted text search to find potentially relevant hospitals, doctors, and services.
+
+## Key Features
+
+- Searchable hospital and doctor directories.
+- Filters for exploring available records.
+- TF-IDF and cosine-similarity text search, combined with keyword matching.
+- Hospital information and related capacity or operating-hours data where available.
+- Charts and data-completeness summaries.
+- Responsible-use notices and missing-data handling.
+
+**Data limitation:** The current repository contains five CSV files. A separate `services.csv` file is not currently included, so service-search results may be empty. The application does not provide verified live availability.
+
+## Technology Stack
+
+- Python
+- Streamlit
+- Pandas
+- scikit-learn
+- Plotly
+- CSV datasets
+
+## Project Structure
+
+```text
+Medifind_AI/
+├── app.py
+├── requirements.txt
+├── README.md
+├── src/
+│   ├── data.py
+│   └── search.py
+├── data/
+│   ├── hospitals.csv
+│   ├── doctors.csv
+│   ├── hospital_hours_capacity.csv
+│   ├── data_dictionary.csv
+│   └── data_quality_notes.csv
+└── tests/
+    └── test_app_core.py
+```
+
+## Run Locally
+
+Python 3.10–3.12 is recommended.
+
+1. Clone or download this repository.
+2. Open a terminal in the project folder.
+3. Create and activate a virtual environment.
+4. Install the dependencies.
+5. Start the application.
+
+### Windows PowerShell
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Linux or macOS
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-streamlit run app.py --server.address 0.0.0.0 --server.port 8501
+python -m pip install -r requirements.txt
+streamlit run app.py
 ```
 
-Open `http://localhost:8501`. To use another port, replace `8501` in the command. The app binds to all interfaces; expose it only behind an appropriately secured network/reverse proxy.
+Open the local URL displayed in the terminal, usually `http://localhost:8501`.
 
-## Docker (IBM LinuxONE / s390x)
-
-The Dockerfile uses the official Python slim base image, supports build-platform architecture selection, and does not pull x86-only model packages. On the LinuxONE Ubuntu 24.04 host, from the extracted project directory:
-
-```bash
-docker build --platform linux/s390x -t medifind-ai:latest .
-docker run -d --name medifind-ai --restart unless-stopped -p 127.0.0.1:8502:8501 medifind-ai:latest
-```
-
-Port `8502` on host is intentionally used as an example to avoid colliding with a JupyterLab service; change the left-hand port if needed. This maps only to localhost. Put a trusted reverse proxy in front if remote access is required; do not expose Streamlit's port publicly without security controls.
-
-The container listens on internal port `8501` by default. To change it, pass both a `PORT` value and a matching container-side port mapping, for example: `docker run -d --name medifind-ai -e PORT=8600 -p 127.0.0.1:8502:8600 medifind-ai:latest`.
-
-Logs and lifecycle:
-
-```bash
-docker logs -f medifind-ai
-docker stop medifind-ai
-docker start medifind-ai
-docker restart medifind-ai
-docker rm -f medifind-ai  # only when you intend to remove the container
-```
-
-Build dependencies are Python wheels resolved for the target platform at build time. LinuxONE/s390x build and runtime were **not available in this sandbox**, so validate the build on the target host; see `ARCHITECTURE.md`. No IBM-specific acceleration is claimed.
-
-## Tests
+## Run Tests
 
 ```bash
 pytest -q
 ```
 
-Tests cover the supplied record counts, relationships, hospital/doctor/service searches, query alias handling, empty/unmatched queries, missing data files, and provisional labeling. See `TEST_REPORT.md` for the executed results and environment limitations.
+## Responsible AI and Limitations
 
-## Project map
+- Search results are suggestions based on directory text, not medical recommendations.
+- Missing or provisional data can affect the relevance of results.
+- The app does not verify provider details or live availability.
+- Users should confirm information directly with healthcare providers.
+- The app is not intended for diagnosis, treatment decisions, or emergencies.
 
-- `app.py` — Streamlit pages and user interface.
-- `src/data.py` — CSV loading, relationship joins, and status labels.
-- `src/search.py` — TF-IDF/keyword search and intent routing.
-- `data/` — original six user-supplied CSV files.
-- `tests/` — automated core tests.
-- `DATA_SOURCES.md`, `RESPONSIBLE_AI.md`, `ARCHITECTURE.md` — provenance, safety and technical design.
-- `DEMO_SCRIPT.md` — <=3-minute presentation outline, suggested queries and submission checklist.
+## Future Improvements
 
-## Important limitations
-
-The source dataset itself notes missing phone/address fields, unverified/provisional doctor information, and transcribed hours. Verify details with providers. Service listings do not prove current operation; hours/capacity rows are not live. This project is not an emergency resource. If someone may be experiencing an emergency, use local emergency services rather than relying on this directory.
+- Add a validated healthcare-services dataset.
+- Integrate verified provider availability where an authorised data source is available.
+- Evaluate search relevance using labelled examples and report precision and recall.
+- Improve data validation, accessibility, and responsible-AI safeguards.
